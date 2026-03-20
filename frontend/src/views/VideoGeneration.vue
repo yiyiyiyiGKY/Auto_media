@@ -675,12 +675,18 @@ function getHeaders() {
 async function loadVoices() {
   try {
     const res = await fetch(`${getBackendUrl()}/api/v1/tts/voices`, { headers: getHeaders() })
+    if (!res.ok) {
+      console.error('Failed to load voices:', res.status, res.statusText)
+      voices.value = []
+      return
+    }
     voices.value = await res.json()
     if (voices.value.length > 0) {
       selectedVoice.value = voices.value[0].id
     }
   } catch (err) {
     console.error('Failed to load voices:', err)
+    voices.value = []
   }
 }
 
