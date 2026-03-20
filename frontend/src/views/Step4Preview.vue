@@ -67,44 +67,8 @@ const totalScenes = computed(() =>
   store.scenes.reduce((sum, s) => sum + s.scenes.length, 0)
 )
 
-async function generateVideo() {
-  videoLoading.value = true
-  videoError.value = ''
-  videoStatus.value = '正在序列化剧本...'
-  videoProgress.value = 5
-
-  try {
-    const { script } = await finalizeScript(store.storyId)
-    videoStatus.value = '正在解析分镜...'
-    videoProgress.value = 10
-    await startStoryboard(store.storyId, script, settings.provider || 'qwen')
-    videoStatus.value = '分镜解析完成，等待后续处理...'
-    videoProgress.value = 30
-
-    pollTimer = setInterval(async () => {
-      try {
-        const s = await getPipelineStatus(store.storyId)
-        videoProgress.value = s.progress
-        videoStatus.value = s.current_step
-        if (s.status === 'complete') {
-          clearInterval(pollTimer)
-          videoLoading.value = false
-        } else if (s.status === 'failed') {
-          clearInterval(pollTimer)
-          videoLoading.value = false
-          videoError.value = s.error || '生成失败'
-        }
-      } catch (e) {
-        clearInterval(pollTimer)
-        videoLoading.value = false
-        videoError.value = e.message
-      }
-    }, 2000)
-  } catch (e) {
-    videoLoading.value = false
-    videoError.value = e.message
-    videoStatus.value = ''
-  }
+function generateVideo() {
+  router.push('/video-generation')
 }
 
 function restart() {

@@ -30,13 +30,19 @@ async def generate_storyboard(
     state.update(status=PipelineStatus.STORYBOARD, progress=10, current_step="解析分镜中")
 
     try:
-        shots = await parse_script_to_storyboard(script, provider=provider, model=model)
+        shots, usage = await parse_script_to_storyboard(script, provider=provider, model=model)
     except Exception as e:
         state.update(status=PipelineStatus.FAILED, error=str(e))
         raise HTTPException(status_code=500, detail=f"分镜解析失败: {e}")
 
     state.update(progress=30, current_step="分镜解析完成")
-    return Storyboard(shots=shots)
+    return Storyboard(
+        shots=shots,
+        usage={
+            "prompt_tokens": usage.get("prompt_tokens", 0),
+            "completion_tokens": usage.get("completion_tokens", 0),
+        }
+    )
 
 
 @router.post("/{project_id}/generate-assets")

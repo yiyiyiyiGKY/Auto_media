@@ -17,3 +17,18 @@ class QwenProvider(BaseLLMProvider):
             ],
         )
         return resp.choices[0].message.content
+
+    async def complete_with_usage(self, system: str, user: str, temperature: float = 0.3) -> tuple[str, dict]:
+        resp = await self._client.chat.completions.create(
+            model=self._model,
+            temperature=temperature,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+        )
+        usage = {
+            "prompt_tokens": resp.usage.prompt_tokens,
+            "completion_tokens": resp.usage.completion_tokens,
+        }
+        return resp.choices[0].message.content, usage
