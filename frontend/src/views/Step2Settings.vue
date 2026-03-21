@@ -25,7 +25,7 @@
       </div>
 
       <!-- 当前问题输入区 -->
-      <div v-if="store.wbCurrentQuestion" class="input-area">
+      <div v-if="store.wbCurrentQuestion && !submitting" class="input-area">
         <div class="progress-bar">
           <div class="progress-fill" :style="{ width: `${(store.wbTurn / 6) * 100}%` }"></div>
         </div>
@@ -38,7 +38,6 @@
             :key="opt"
             class="opt-btn"
             :class="{ selected: answer === opt }"
-            :disabled="submitting"
             @click="answer = opt; customAnswer = ''"
           >{{ opt }}</button>
         </div>
@@ -50,7 +49,6 @@
           placeholder="或者自己输入..."
           rows="2"
           class="open-input"
-          :disabled="submitting"
           @input="answer = customAnswer"
         />
 
@@ -61,12 +59,11 @@
           placeholder="请输入你的想法..."
           rows="3"
           class="open-input"
-          :disabled="submitting"
         />
 
         <div class="btn-row">
-          <button class="back-btn" :disabled="submitting" @click="router.push('/step1')">← 返回</button>
-          <button class="submit-btn" :disabled="!answer.trim() || submitting" @click="submitTurn">
+          <button class="back-btn" @click="router.push('/step1')">← 返回</button>
+          <button class="submit-btn" :disabled="!answer.trim()" @click="submitTurn">
             提交回答 →
           </button>
         </div>
@@ -124,15 +121,15 @@ async function scrollToBottom() {
 watch(() => store.wbHistory.length, scrollToBottom)
 
 async function submitTurn() {
-  if (!settings.useMock && !settings.effectiveLlmApiKey) { showKeyModal.value = true; return }
+  if (!settings.useMock && !settings.apiKey) { showKeyModal.value = true; return }
   const userAnswer = answer.value.trim()
   if (!userAnswer) return
   submitting.value = true
   error.value = ''
+  answer.value = ''
+  customAnswer.value = ''
   try {
     const result = await worldBuildingTurn(store.storyId, userAnswer)
-    answer.value = ''
-    customAnswer.value = ''
     store.appendWbTurn({ ...result, answer: userAnswer })
     if (result.status === 'complete') {
       complete.value = true
@@ -214,7 +211,6 @@ h1 { font-size: 26px; font-weight: 700; margin-bottom: 6px; }
 }
 .opt-btn:hover { border-color: #6c63ff; color: #6c63ff; }
 .opt-btn.selected { border-color: #6c63ff; background: #f0eeff; color: #6c63ff; font-weight: 600; }
-.opt-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .open-input {
   width: 100%;
@@ -228,7 +224,6 @@ h1 { font-size: 26px; font-weight: 700; margin-bottom: 6px; }
   transition: border-color 0.2s;
 }
 .open-input:focus { border-color: #6c63ff; outline: none; }
-.open-input:disabled { background: #f9f9f9; color: #999; cursor: not-allowed; }
 
 .btn-row { display: flex; gap: 12px; }
 .back-btn {
@@ -240,7 +235,6 @@ h1 { font-size: 26px; font-weight: 700; margin-bottom: 6px; }
   border: 2px solid #e0e0e0;
   cursor: pointer;
 }
-.back-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .submit-btn {
   flex: 1;
   padding: 12px;

@@ -1,31 +1,40 @@
 import json
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Request, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.schemas.story import AnalyzeIdeaRequest, GenerateOutlineRequest, GenerateScriptRequest, ChatRequest, RefineRequest, WorldBuildingStartRequest, WorldBuildingTurnRequest
 from app.services.story_llm import analyze_idea, generate_outline, generate_script, chat, refine, world_building_start, world_building_turn
 from app.services import story_repository as repo
-from app.core.api_keys import llm_config_dep
 
 router = APIRouter(prefix="/api/v1/story", tags=["story"])
 
 
+def get_llm_config(request: Request):
+    return {
+        "api_key": request.headers.get("X-LLM-API-Key", ""),
+        "base_url": request.headers.get("X-LLM-Base-URL", ""),
+        "provider": request.headers.get("X-LLM-Provider", ""),
+    }
+
+
 @router.post("/analyze-idea")
-async def api_analyze_idea(req: AnalyzeIdeaRequest, llm: dict = Depends(llm_config_dep), db: AsyncSession = Depends(get_db)):
-    return await analyze_idea(req.idea, req.genre, req.tone, db=db, **llm)
+async def api_analyze_idea(req: AnalyzeIdeaRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    return await analyze_idea(req.idea, req.genre, req.tone, db=db, **get_llm_config(request))
 
 
 @router.post("/generate-outline")
-async def api_generate_outline(req: GenerateOutlineRequest, llm: dict = Depends(llm_config_dep), db: AsyncSession = Depends(get_db)):
-    return await generate_outline(req.story_id, req.selected_setting, db=db, **llm)
+async def api_generate_outline(req: GenerateOutlineRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    return await generate_outline(req.story_id, req.selected_setting, db=db, **get_llm_config(request))
 
 
 @router.post("/chat")
-async def api_chat(req: ChatRequest, llm: dict = Depends(llm_config_dep), db: AsyncSession = Depends(get_db)):
+async def api_chat(req: ChatRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    cfg = get_llm_config(request)
+
     async def event_stream():
         try:
-            async for chunk in chat(req.story_id, req.message, db=db, **llm):
+            async for chunk in chat(req.story_id, req.message, db=db, **cfg):
                 yield f"data: {chunk}\n\n"
         except Exception as e:
             yield f"data: [ERROR] {str(e)}\n\n"
@@ -35,11 +44,13 @@ async def api_chat(req: ChatRequest, llm: dict = Depends(llm_config_dep), db: As
 
 
 @router.post("/generate-script")
-async def api_generate_script(req: GenerateScriptRequest, llm: dict = Depends(llm_config_dep), db: AsyncSession = Depends(get_db)):
+async def api_generate_script(req: GenerateScriptRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    cfg = get_llm_config(request)
+
     async def event_stream():
         scenes = []
         try:
-            async for scene in generate_script(req.story_id, db=db, **llm):
+            async for scene in generate_script(req.story_id, db=db, **cfg):
                 if "__usage__" not in scene:
                     scenes.append(scene)
                     yield f"data: {json.dumps(scene, ensure_ascii=False)}\n\n"
@@ -47,6 +58,7 @@ async def api_generate_script(req: GenerateScriptRequest, llm: dict = Depends(ll
                     yield f"data: {json.dumps(scene, ensure_ascii=False)}\n\n"
         except Exception as e:
             yield f"data: [ERROR] {str(e)}\n\n"
+        # 保存完整剧本供第二阶段使用
         await repo.save_story(db, req.story_id, {"scenes": scenes})
         yield "data: [DONE]\n\n"
 
@@ -54,18 +66,18 @@ async def api_generate_script(req: GenerateScriptRequest, llm: dict = Depends(ll
 
 
 @router.post("/refine")
-async def api_refine(req: RefineRequest, llm: dict = Depends(llm_config_dep), db: AsyncSession = Depends(get_db)):
-    return await refine(req.story_id, req.change_type, req.change_summary, db=db, **llm)
+async def api_refine(req: RefineRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    return await refine(req.story_id, req.change_type, req.change_summary, db=db, **get_llm_config(request))
 
 
 @router.post("/world-building/start")
-async def api_wb_start(req: WorldBuildingStartRequest, llm: dict = Depends(llm_config_dep), db: AsyncSession = Depends(get_db)):
-    return await world_building_start(req.idea, db=db, **llm)
+async def api_wb_start(req: WorldBuildingStartRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    return await world_building_start(req.idea, db=db, **get_llm_config(request))
 
 
 @router.post("/world-building/turn")
-async def api_wb_turn(req: WorldBuildingTurnRequest, llm: dict = Depends(llm_config_dep), db: AsyncSession = Depends(get_db)):
-    return await world_building_turn(req.story_id, req.answer, db=db, **llm)
+async def api_wb_turn(req: WorldBuildingTurnRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    return await world_building_turn(req.story_id, req.answer, db=db, **get_llm_config(request))
 
 
 @router.post("/{story_id}/finalize")
@@ -74,6 +86,7 @@ async def finalize_script(story_id: str, db: AsyncSession = Depends(get_db)):
     story = await repo.get_story(db, story_id)
     scenes = story.get("scenes", [])
     if not scenes:
+        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="剧本尚未生成，请先调用 generate-script")
 
     lines = []

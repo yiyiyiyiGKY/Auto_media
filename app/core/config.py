@@ -28,10 +28,6 @@ class Settings(BaseSettings):
     siliconflow_api_key: str = ""
     siliconflow_base_url: str = "https://api.siliconflow.cn/v1"
 
-    # Video generation
-    dashscope_api_key: str = ""
-    dashscope_base_url: str = "https://dashscope.aliyuncs.com/api/v1"
-
     class Config:
         env_file = ".env"
 

@@ -32,12 +32,6 @@ class PipelineExecutor:
         image_model: str,
         video_model: str,
         base_url: str,
-        llm_api_key: str = "",
-        llm_base_url: str = "",
-        image_api_key: str = "",
-        image_base_url: str = "",
-        video_api_key: str = "",
-        video_base_url: str = "",
     ):
         """执行完整的生成流水线"""
         try:
@@ -48,9 +42,7 @@ class PipelineExecutor:
                 "解析分镜中",
                 {"step": "storyboard", "current": 0, "total": 100, "message": "正在解析剧本..."},
             )
-            self.shots, _ = await parse_script_to_storyboard(
-                script, provider, model, api_key=llm_api_key, base_url=llm_base_url
-            )
+            self.shots = await parse_script_to_storyboard(script, provider, model)
 
             if not self.shots:
                 raise ValueError("分镜解析失败：没有生成任何镜头")
@@ -67,11 +59,11 @@ class PipelineExecutor:
             # 根据策略执行
             if strategy == GenerationStrategy.SEPARATED:
                 await self._run_separated_strategy(
-                    voice, image_model, video_model, base_url, image_api_key, image_base_url, video_api_key, video_base_url
+                    voice, image_model, video_model, base_url
                 )
             else:
                 await self._run_integrated_strategy(
-                    image_model, video_model, base_url, image_api_key, image_base_url, video_api_key, video_base_url
+                    image_model, video_model, base_url
                 )
 
             # Step 5: FFmpeg 合成（仅分离策略需要）
@@ -96,10 +88,6 @@ class PipelineExecutor:
         image_model: str,
         video_model: str,
         base_url: str,
-        image_api_key: str = "",
-        image_base_url: str = "",
-        video_api_key: str = "",
-        video_base_url: str = "",
     ):
         """
         策略 A: 分离式
@@ -142,8 +130,6 @@ class PipelineExecutor:
         image_results = await image.generate_images_batch(
             shots=[{"shot_id": s.shot_id, "visual_prompt": s.visual_prompt} for s in self.shots],
             model=image_model,
-            image_api_key=image_api_key,
-            image_base_url=image_base_url,
         )
         image_map = {r["shot_id"]: r for r in image_results}
 
@@ -177,8 +163,6 @@ class PipelineExecutor:
             ],
             base_url=base_url,
             model=video_model,
-            video_api_key=video_api_key,
-            video_base_url=video_base_url,
         )
         video_map = {r["shot_id"]: r for r in video_results}
 
@@ -205,10 +189,6 @@ class PipelineExecutor:
         image_model: str,
         video_model: str,
         base_url: str,
-        image_api_key: str = "",
-        image_base_url: str = "",
-        video_api_key: str = "",
-        video_base_url: str = "",
     ):
         """
         策略 B: 一体式
@@ -228,8 +208,6 @@ class PipelineExecutor:
         image_results = await image.generate_images_batch(
             shots=[{"shot_id": s.shot_id, "visual_prompt": s.visual_prompt} for s in self.shots],
             model=image_model,
-            image_api_key=image_api_key,
-            image_base_url=image_base_url,
         )
         image_map = {r["shot_id"]: r for r in image_results}
 
@@ -265,8 +243,6 @@ class PipelineExecutor:
             ],
             base_url=base_url,
             model=video_model,
-            video_api_key=video_api_key,
-            video_base_url=video_base_url,
         )
         video_map = {r["shot_id"]: r for r in video_results}
 
